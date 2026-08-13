@@ -5,11 +5,11 @@ A self-hosted AI agent gateway with **local-first inference** via Ollama, **auto
 ## Quick Start
 
 ```bash
-# Run the script — you'll be prompted for your OpenRouter API key
-bash Hermes.sh
+# Fully automated — just set your API key and run
+OPENROUTER_API_KEY="sk-or-v1-xxx" bash Hermes.sh
 ```
 
-> **That's it.** The script prompts for your OpenRouter API key, then installs everything — Ollama, Hermes Agent, 64K context, Nginx reverse proxy with basic auth (admin/admin), firewall, and systemd service. Full install takes 5-15 minutes.
+> **That's it.** One command, no prompts, no editing files. The script installs everything — Ollama, Hermes Agent, 64K context, Nginx reverse proxy with basic auth (admin/admin), firewall, and systemd service. Full install takes 5-15 minutes.
 
 ### Test your server
 

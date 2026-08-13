@@ -31,25 +31,19 @@ Before installing, open these ports in your cloud provider's firewall:
 
 ## Step 1 — Run the Installer
 
-Simply run the script — it will prompt you for the OpenRouter API key:
+```bash
+OPENROUTER_API_KEY="sk-or-v1-xxx" bash Hermes.sh
+```
+
+That's it. One command. No prompts, no config files, no editing scripts. The install runs fully automated with all default settings.
+
+Or if you're on a fresh server without the repo:
 
 ```bash
-bash Hermes.sh
+curl -fsSL https://raw.githubusercontent.com/ikhsannur1996/hermes-agent-hybrid/main/install.sh | OPENROUTER_API_KEY="sk-or-v1-xxx" bash
 ```
 
-You'll be asked to paste your OpenRouter API key at the start:
-
-```
-============================================================
- OpenRouter API Key Required
-============================================================
-
-Get your free key at: https://openrouter.ai/keys
-
-Enter your OpenRouter API key (sk-or-v1-...):
-```
-
-Paste your key and press Enter — the install continues automatically.
+> If you forget to set `OPENROUTER_API_KEY`, the script shows the usage message and exits — just re-run with the key.
 
 ## Step 2 — What the Script Installs
 

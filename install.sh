@@ -2,17 +2,23 @@
 set -Eeuo pipefail
 
 # ============================================================
-# HERMES AGENT HYBRID
+# HERMES AGENT HYBRID — Fully automated
 # ============================================================
-# Minimal config — just needs your OpenRouter API key.
-# All defaults are sensible for a 4 vCPU / 16 GB / Ubuntu 24.04 VM.
+# Usage:
+#   OPENROUTER_API_KEY="sk-or-v1-xxx" bash Hermes.sh
+#
+# Or to auto-accept everything including defaults:
+#   OPENROUTER_API_KEY="sk-or-v1-xxx" bash Hermes.sh
+#
+# All settings use sensible defaults for a
+# 4 vCPU / 16 GB / Ubuntu 24.04 VM.
 #
 # PUBLIC API:  http://PUBLIC_IP:8642/v1
 # BROWSER:     admin / admin
 # MODEL:       Ollama (local) -> OpenRouter (fallback)
 # ============================================================
 
-OPENROUTER_API_KEY=""
+OPENROUTER_API_KEY="${OPENROUTER_API_KEY:-}"
 OLLAMA_MODEL="qwen3:8b"
 OPENROUTER_MODEL="qwen/qwen3-coder"
 API_PORT="8642"
@@ -21,19 +27,16 @@ HERMES_INTERNAL_PORT="8643"
 BASIC_AUTH_USER="admin"
 BASIC_AUTH_PASS="admin"
 
-echo
-echo "============================================================"
-echo " OpenRouter API Key Required"
-echo "============================================================"
-echo
-echo "Get your free key at: https://openrouter.ai/keys"
-echo
-echo -n "Enter your OpenRouter API key (sk-or-v1-...): "
-read -r OPENROUTER_API_KEY
-echo
-
 if [[ -z "$OPENROUTER_API_KEY" ]]; then
-    echo "ERROR: No API key provided. Aborting."
+    echo
+    echo "============================================================"
+    echo " OpenRouter API Key Required"
+    echo "============================================================"
+    echo
+    echo "Get your free key at: https://openrouter.ai/keys"
+    echo
+    echo "Usage: OPENROUTER_API_KEY=\"sk-or-v1-xxx\" bash Hermes.sh"
+    echo
     exit 1
 fi
 
