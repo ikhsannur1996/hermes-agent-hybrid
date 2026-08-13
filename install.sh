@@ -1,19 +1,18 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-# HERMES AGENT HYBRID — One-shot Install
-# You will be prompted for your OpenRouter API key.
+# HERMES AGENT HYBRID — zero-config install
+# Just paste your OpenRouter API key when prompted.
 # Get one at: https://openrouter.ai/keys
 
-OLLAMA_MODEL="${OLLAMA_MODEL:-qwen3:8b}"
-OPENROUTER_MODEL="${OPENROUTER_MODEL:-qwen/qwen3-coder}"
-API_PORT="${API_PORT:-8642}"
-HERMES_INTERNAL_PORT="${HERMES_INTERNAL_PORT:-8643}"
+OLLAMA_MODEL="qwen3:8b"
+OPENROUTER_MODEL="qwen/qwen3-coder"
+API_PORT="8642"
+HERMES_INTERNAL_PORT="8643"
 OLLAMA_URL="http://127.0.0.1:11434"
-BASIC_AUTH_USER="${BASIC_AUTH_USER:-admin}"
-BASIC_AUTH_PASS="${BASIC_AUTH_PASS:-admin}"
+BASIC_AUTH_USER="admin"
+BASIC_AUTH_PASS="admin"
 
-# Prompt for API key
 echo; echo "===== Hermes Hybrid Installation ====="
 echo; echo "Get your free OpenRouter API key at: https://openrouter.ai/keys"
 echo -n "Enter your OpenRouter API key (sk-or-v1-...): "
@@ -21,13 +20,8 @@ read -r OPENROUTER_API_KEY
 echo; if [[ -z "$OPENROUTER_API_KEY" ]]; then echo "ERROR: No API key provided."; exit 1; fi
 
 API_SERVER_KEY="$(openssl rand -hex 32)"
-echo; echo "===== Configuration ====="; echo
-echo "Local model         : ${OLLAMA_MODEL}"
-echo "OpenRouter model    : ${OPENROUTER_MODEL}"
-echo "Public API port     : ${API_PORT} (Nginx + basic auth)"
-echo "Browser login       : ${BASIC_AUTH_USER} / ${BASIC_AUTH_PASS}"
-echo "Generated API key   : ${API_SERVER_KEY}"
-echo
+echo; echo "Local model: ${OLLAMA_MODEL} | OpenRouter: ${OPENROUTER_MODEL} | Port: ${API_PORT} | Browser: ${BASIC_AUTH_USER}/${BASIC_AUTH_PASS}"
+echo "API Key: ${API_SERVER_KEY}"; echo
 
 # 1. SYSTEM PACKAGES
 echo "[1/12] Updating system..."

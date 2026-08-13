@@ -1,65 +1,26 @@
 cat > /tmp/install-hermes-hybrid.sh <<'SCRIPT'
 #!/usr/bin/env bash
-
 set -Eeuo pipefail
 
 # ============================================================
-# HERMES AGENT HYBRID TEST SERVER
+# HERMES AGENT HYBRID
+# ============================================================
+# Minimal config — just needs your OpenRouter API key.
+# All defaults are sensible for a 4 vCPU / 16 GB / Ubuntu 24.04 VM.
 #
-# VM:
-#   4 vCPU
-#   16 GB RAM
-#   Ubuntu 24.04
-#   No GPU
-#
-# PUBLIC API:
-#   http://PUBLIC_IP:8642/v1
-#
-# AI:
-#   PRIMARY  -> Ollama
-#   FALLBACK -> OpenRouter
-#
+# PUBLIC API:  http://PUBLIC_IP:8642/v1
+# BROWSER:     admin / admin
+# MODEL:       Ollama (local) -> OpenRouter (fallback)
 # ============================================================
 
-# =========================
-# USER CONFIGURATION
-# =========================
-
 OPENROUTER_API_KEY=""
-
-# Local model.
-#
-# IMPORTANT:
-# Hermes requires >=64K context.
-# Set Ollama context explicitly below.
-#
-# If this model is unavailable on your Ollama version,
-# replace it with another tool-capable model.
 OLLAMA_MODEL="qwen3:8b"
-
-# OpenRouter fallback.
-#
-# Change to any current 64K+ model available in your
-# OpenRouter account/catalog.
 OPENROUTER_MODEL="qwen/qwen3-coder"
-
 API_PORT="8642"
-
-# Ollama remains localhost-only.
 OLLAMA_URL="http://127.0.0.1:11434"
-
-# Hermes runs on this internal port; Nginx proxies 8642 -> 8643
 HERMES_INTERNAL_PORT="8643"
-
-# Browser basic auth credentials (Nginx reverse proxy)
 BASIC_AUTH_USER="admin"
 BASIC_AUTH_PASS="admin"
-
-# =========================
-# PROMPT FOR API KEY
-# =========================
-# Ask user for OpenRouter API key interactively.
-# This avoids storing secrets in the script or .env file.
 
 echo
 echo "============================================================"
@@ -77,10 +38,6 @@ if [[ -z "$OPENROUTER_API_KEY" ]]; then
     exit 1
 fi
 
-# =========================
-# GENERATE API KEY
-# =========================
-
 API_SERVER_KEY="$(openssl rand -hex 32)"
 
 echo
@@ -91,6 +48,7 @@ echo
 echo "Local model      : ${OLLAMA_MODEL}"
 echo "OpenRouter model : ${OPENROUTER_MODEL}"
 echo "API port         : ${API_PORT}"
+echo "Browser login    : ${BASIC_AUTH_USER} / ${BASIC_AUTH_PASS}"
 echo
 echo "Generated API key:"
 echo "${API_SERVER_KEY}"
