@@ -29,37 +29,29 @@ Before installing, open these ports in your cloud provider's firewall:
 
 > ⚠️ **Do NOT** expose port `11434` (Ollama) publicly.
 
-## Step 1 — Configure the Script
+## Step 1 — Run the Installer
 
-Open `Hermes.sh` and edit the **USER CONFIGURATION** block at the top:
-
-```bash
-# =========================
-# USER CONFIGURATION
-# =========================
-
-OPENROUTER_API_KEY="sk-or-v1-your-key-here"
-
-OLLAMA_MODEL="qwen3:8b"
-OPENROUTER_MODEL="qwen/qwen3-coder"
-API_PORT="8642"
-```
-
-| Setting | Default | What it does |
-|---------|---------|--------------|
-| `OPENROUTER_API_KEY` | *(required)* | Cloud fallback key |
-| `OLLAMA_MODEL` | `qwen3:8b` | Local model (needs 64K+ context) |
-| `OPENROUTER_MODEL` | `qwen/qwen3-coder` | Fallback model on OpenRouter |
-| `API_PORT` | `8642` | Public API port |
-| `OLLAMA_URL` | `http://127.0.0.1:11434` | Local Ollama address — leave as-is |
-
-> The script aborts with an error if `OPENROUTER_API_KEY` is still `sk-or-REPLACE_ME`.
-
-## Step 2 — Run the Installer
+Simply run the script — it will prompt you for the OpenRouter API key:
 
 ```bash
 bash Hermes.sh
 ```
+
+You'll be asked to paste your OpenRouter API key at the start:
+
+```
+============================================================
+ OpenRouter API Key Required
+============================================================
+
+Get your free key at: https://openrouter.ai/keys
+
+Enter your OpenRouter API key (sk-or-v1-...):
+```
+
+Paste your key and press Enter — the install continues automatically.
+
+## Step 2 — What the Script Installs
 
 The script runs **12 steps**:
 
@@ -76,6 +68,7 @@ The script runs **12 steps**:
 | 9 | Writes Hermes model config to `~/.hermes/config.yaml` |
 | 10 | Configures UFW firewall |
 | 11 | Creates the `hermes-gateway` systemd service |
+| 11b | Installs **Nginx** reverse proxy with basic auth (`admin`/`admin`) |
 | 12 | Verifies the service and prints connection info |
 
 ## Step 3 — What You Should See

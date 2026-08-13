@@ -25,7 +25,7 @@ set -Eeuo pipefail
 # USER CONFIGURATION
 # =========================
 
-OPENROUTER_API_KEY="sk-or-REPLACE_ME"
+OPENROUTER_API_KEY=""
 
 # Local model.
 #
@@ -56,29 +56,24 @@ BASIC_AUTH_USER="admin"
 BASIC_AUTH_PASS="admin"
 
 # =========================
-# OPTIONAL: SOURCE .env FILE
+# PROMPT FOR API KEY
 # =========================
-#
-# If a .env file exists next to this script, load it.
-# Values in .env override the defaults above.
-# This lets you configure without editing the script.
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-if [[ -f "${SCRIPT_DIR}/.env" ]]; then
-    echo "Loading configuration from ${SCRIPT_DIR}/.env"
-    set -a
-    source "${SCRIPT_DIR}/.env"
-    set +a
-fi
+# Ask user for OpenRouter API key interactively.
+# This avoids storing secrets in the script or .env file.
 
-# =========================
-# VALIDATION
-# =========================
+echo
+echo "============================================================"
+echo " OpenRouter API Key Required"
+echo "============================================================"
+echo
+echo "Get your free key at: https://openrouter.ai/keys"
+echo
+echo -n "Enter your OpenRouter API key (sk-or-v1-...): "
+read -r OPENROUTER_API_KEY
+echo
 
-if [[ "$OPENROUTER_API_KEY" == "sk-or-REPLACE_ME" ]]; then
-    echo
-    echo "ERROR:"
-    echo "Set OPENROUTER_API_KEY in this script first."
-    echo
+if [[ -z "$OPENROUTER_API_KEY" ]]; then
+    echo "ERROR: No API key provided. Aborting."
     exit 1
 fi
 
@@ -470,6 +465,9 @@ http://${PUBLIC_IP}:${API_PORT}/v1/chat/completions
 API Key:
 ${API_SERVER_KEY}
 
+Browser Login:
+${BASIC_AUTH_USER} / ${BASIC_AUTH_PASS}
+
 Local Ollama:
 ${OLLAMA_URL}:11434
 
@@ -492,7 +490,7 @@ echo "============================================================"
 echo " INSTALLATION FINISHED"
 echo "============================================================"
 echo
-echo "PUBLIC API"
+echo "PUBLIC API (login: admin / admin)"
 echo
 echo "  http://${PUBLIC_IP}:${API_PORT}/v1"
 echo
@@ -511,6 +509,10 @@ echo
 echo "API KEY"
 echo
 echo "  ${API_SERVER_KEY}"
+echo
+echo "BROWSER LOGIN"
+echo
+echo "  ${BASIC_AUTH_USER} / ${BASIC_AUTH_PASS}"
 echo
 echo "Saved to:"
 echo
@@ -551,6 +553,9 @@ echo
 echo "Do NOT expose:"
 echo
 echo "  TCP 11434 - Ollama"
+echo "  TCP ${HERMES_INTERNAL_PORT} - Hermes internal (localhost only)"
+echo
+echo "Browser login: ${BASIC_AUTH_USER} / ${BASIC_AUTH_PASS}"
 echo
 echo "============================================================"
 SCRIPT

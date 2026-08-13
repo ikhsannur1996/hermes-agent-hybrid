@@ -1,19 +1,15 @@
 # Hermes Agent Hybrid
 
-A self-hosted AI agent gateway with **local-first inference** via Ollama and **automatic cloud fallback** via OpenRouter.
+A self-hosted AI agent gateway with **local-first inference** via Ollama, **automatic cloud fallback** via OpenRouter, and **Nginx reverse proxy** with basic auth for browser access.
 
 ## Quick Start
 
 ```bash
-# 1. Copy env file and set your OpenRouter API key
-cp .env.example .env
-# Edit .env: change OPENROUTER_API_KEY to your real key
-
-# 2. Run (one command)
+# Run the script — you'll be prompted for your OpenRouter API key
 bash Hermes.sh
 ```
 
-> **That's it.** The script installs everything — Ollama, Hermes Agent, 64K context, firewall, systemd service, and generates a random API key. Full install takes 5-15 minutes depending on download speed.
+> **That's it.** The script prompts for your OpenRouter API key, then installs everything — Ollama, Hermes Agent, 64K context, Nginx reverse proxy with basic auth (admin/admin), firewall, and systemd service. Full install takes 5-15 minutes.
 
 ### Test your server
 
@@ -24,6 +20,8 @@ curl -X POST http://YOUR_SERVER_IP:8642/v1/chat/completions \
   -d '{"model":"hermes-agent","messages":[{"role":"user","content":"Hello!"}]}'
 ```
 
+> Or open `http://YOUR_SERVER_IP:8642` in a browser — you'll see a login prompt (admin / admin), then the API response.
+
 > The API key is printed at the end of the install and saved to `~/hermes-connection.txt`.
 
 ## Specs
@@ -32,7 +30,8 @@ curl -X POST http://YOUR_SERVER_IP:8642/v1/chat/completions \
 |-----------|------|---------|
 | Local model | Fast, private, offline-capable | `qwen3:8b` via Ollama |
 | Cloud fallback | Handles complex tasks | `qwen/qwen3-coder` via OpenRouter |
-| API gateway | OpenAI-compatible endpoint | Port `8642`, bearer auth |
+| API gateway | OpenAI-compatible endpoint | Port `8643` (internal), `8642` (public via Nginx) |
+| Browser auth | Basic auth login prompt | `admin` / `admin` |
 | VM target | 4 vCPU, 16 GB RAM, Ubuntu 24.04 | No GPU needed |
 
 ## Tutorials
@@ -49,8 +48,9 @@ curl -X POST http://YOUR_SERVER_IP:8642/v1/chat/completions \
 ## What's Inside
 
 ```
-.env.example           — Config template (copy to .env and set your key)
-Hermes.sh              — One-shot install script
+Hermes.sh              — Main install script (interactive API key prompt)
+install.sh             — One-shot installer for piping from URL
+deploy.sh              — Copies repo to remote server via SSH
 tutorials/
 ├── 01-overview.md     — What Hermes is and how it works
 ├── 02-installation.md — Complete install walkthrough
@@ -64,25 +64,27 @@ README.md              — This file
 ## Architecture
 
 ```
-Your App ──► Hermes Gateway ──► Ollama (local)
-                   │
-                   └──► OpenRouter (fallback)
+Browser ──► Nginx (port 8642) ──► Hermes Gateway (port 8643) ──► Ollama (local)
+                │                                                       │
+          login prompt:                                           fallback
+          admin / admin                                               │
+                                                                OpenRouter
 ```
 
 ## Requirements
 
 - Ubuntu 24.04 (or recent Debian-based distro)
 - 4 vCPU, 16 GB RAM
-- [OpenRouter API key](https://openrouter.ai/keys)
+- [OpenRouter API key](https://openrouter.ai/keys) — you'll be prompted during install
 - Ports `22` (SSH) and `8642` (Hermes) open in firewall
 
 ## Important Notes
 
-- **Do not expose port 11434** (Ollama) publicly
+- **Do not expose port 11434** (Ollama) or port **8643** (Hermes internal) publicly
 - The script generates a random API key on each install — save it from the output
 - First request is slow (model loads into RAM)
 - `qwen3:8b` requires ~4.7 GB download on first install
-- The script auto-detects `.env` in the same directory — no need to edit `Hermes.sh`
+- Browser access requires login: **admin** / **admin**
 
 ## License
 

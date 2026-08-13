@@ -2,12 +2,9 @@
 set -Eeuo pipefail
 
 # HERMES AGENT HYBRID — One-shot Install
-# Browser basic auth: admin / admin
-# Usage:
-#   export OPENROUTER_API_KEY="sk-or-v1-xxx"
-#   curl -fsSL https://raw.githubusercontent.com/ikhsannur1996/hermes-agent-hybrid/main/install.sh | bash
+# You will be prompted for your OpenRouter API key.
+# Get one at: https://openrouter.ai/keys
 
-OPENROUTER_API_KEY="${OPENROUTER_API_KEY:-sk-or-REPLACE_ME}"
 OLLAMA_MODEL="${OLLAMA_MODEL:-qwen3:8b}"
 OPENROUTER_MODEL="${OPENROUTER_MODEL:-qwen/qwen3-coder}"
 API_PORT="${API_PORT:-8642}"
@@ -16,15 +13,15 @@ OLLAMA_URL="http://127.0.0.1:11434"
 BASIC_AUTH_USER="${BASIC_AUTH_USER:-admin}"
 BASIC_AUTH_PASS="${BASIC_AUTH_PASS:-admin}"
 
-if [[ "$OPENROUTER_API_KEY" == "sk-or-REPLACE_ME" ]]; then
-    echo; echo "ERROR: Set your OpenRouter API key first."
-    echo "  export OPENROUTER_API_KEY=\"sk-or-v1-xxx\""
-    echo "  curl -fsSL https://raw.githubusercontent.com/ikhsannur1996/hermes-agent-hybrid/main/install.sh | bash"
-    exit 1
-fi
+# Prompt for API key
+echo; echo "===== Hermes Hybrid Installation ====="
+echo; echo "Get your free OpenRouter API key at: https://openrouter.ai/keys"
+echo -n "Enter your OpenRouter API key (sk-or-v1-...): "
+read -r OPENROUTER_API_KEY
+echo; if [[ -z "$OPENROUTER_API_KEY" ]]; then echo "ERROR: No API key provided."; exit 1; fi
 
 API_SERVER_KEY="$(openssl rand -hex 32)"
-echo; echo "===== Hermes Hybrid Installation ====="; echo
+echo; echo "===== Configuration ====="; echo
 echo "Local model         : ${OLLAMA_MODEL}"
 echo "OpenRouter model    : ${OPENROUTER_MODEL}"
 echo "Public API port     : ${API_PORT} (Nginx + basic auth)"
@@ -44,13 +41,13 @@ sudo systemctl enable ollama; sudo systemctl restart ollama
 echo "Waiting for Ollama to be ready..."
 for i in $(seq 1 12); do
     if curl -fsS "${OLLAMA_URL}/api/tags" >/dev/null 2>&1; then echo "Ollama is ready."; break; fi
-    if [[ "$i" -eq 12 ]]; then echo "ERROR: Ollama failed to start after 60 seconds."; sudo systemctl status ollama --no-pager || true; exit 1; fi
+    if [[ "$i" -eq 12 ]]; then echo "ERROR: Ollama failed to start."; sudo systemctl status ollama --no-pager || true; exit 1; fi
     sleep 5
 done
 
 # 3. TEST OLLAMA
 echo "[3/12] Testing Ollama..."
-if ! curl -fsS "${OLLAMA_URL}/api/tags" >/dev/null; then echo "ERROR: Ollama is not responding."; sudo systemctl status ollama --no-pager || true; exit 1; fi
+if ! curl -fsS "${OLLAMA_URL}/api/tags" >/dev/null; then echo "ERROR: Ollama not responding."; sudo systemctl status ollama --no-pager || true; exit 1; fi
 echo "Ollama is running."
 
 # 4. PULL LOCAL MODEL
@@ -85,8 +82,7 @@ echo; hermes --version; echo
 
 # 7. CREATE DIRECTORIES
 echo "[7/12] Creating Hermes configuration..."
-mkdir -p "${HOME}/.hermes"
-chmod 700 "${HOME}/.hermes"
+mkdir -p "${HOME}/.hermes"; chmod 700 "${HOME}/.hermes"
 
 # 8. SECRETS
 echo "[8/12] Writing secrets..."
@@ -98,98 +94,6 @@ API_SERVER_PORT=${HERMES_INTERNAL_PORT}
 API_SERVER_KEY=${API_SERVER_KEY}
 ENV_EOF
 chmod 600 "${HOME}/.hermes/.env"
-
-# 9. MODEL CONFIG
-echo "[9/12] Configuring Hermes..."
-cat > "${HOME}/.hermes/config.yaml" <<CONF_EOF
-model:
-  provider: custom; default: ${OLLAMA_MODEL}
-  base_url: ${OLLAMA_URL}/v1; context_length: 65536
-fallback_providers:
-  - provider: openrouter; model: ${OPENROUTER_MODEL}
-terminal:
-  backend: local; timeout: 180
-CONF_EOF
-chmod 600 "${HOME}/.hermes/config.yaml"
-
-# 10. FIREWALL
-echo "[10/12] Configuring firewall..."
-sudo ufw default deny incoming; sudo ufw default allow outgoing
-sudo ufw allow 22/tcp
-sudo ufw allow "${API_PORT}/tcp"
-sudo ufw --force enable; echo; sudo ufw status; echo
-
-# 11. SYSTEMD SERVICE
-echo "[11/12] Creating Hermes gateway service..."
-HERMES_USER="$(id -un)"
-HERMES_HOME="${HOME}"
-HERMES_BIN="${HOME}/.local/bin/hermes"
-cat > /tmp/hermes-gateway.service <<'SVC_EOF'
-[Unit]
-Description=Hermes Agent Gateway
-After=network-online.target ollama.service
-Wants=network-online.target; Requires=ollama.service
-
-[Service]; Type=simple
-User=${HERMES_USER}; Group=${HERMES_USER}
-WorkingDirectory=${HERMES_HOME}
-Environment=HOME=${HERMES_HOME}
-Environment=PATH=${HERMES_HOME}/.local/bin:/usr/local/bin:/usr/bin:/bin
-EnvironmentFile=${HERMES_HOME}/.hermes/.env
-ExecStart=${HERMES_BIN} gateway run
-Restart=always; RestartSec=5
-KillSignal=SIGINT; TimeoutStopSec=30
-
-[Install]; WantedBy=multi-user.target
-SVC_EOF
-sudo cp /tmp/hermes-gateway.service /etc/systemd/system/hermes-gateway.service
-sudo systemctl daemon-reload; sudo systemctl enable hermes-gateway; sudo systemctl restart hermes-gateway
-
-# 11b. NGINX REVERSE PROXY WITH BASIC AUTH
-echo "[11b/12] Installing Nginx with basic auth..."
-sudo DEBIAN_FRONTEND=noninteractive apt-get install -y nginx apache2-utils
-HTPASSWD="$(openssl passwd -apr1 "${BASIC_AUTH_PASS}")"
-echo "${BASIC_AUTH_USER}:${HTPASSWD}" | sudo tee /etc/nginx/.htpasswd >/dev/null
-sudo chmod 644 /etc/nginx/.htpasswd; sudo rm -f /etc/nginx/sites-enabled/default
-cat > /tmp/hermes-nginx.conf <<'NGX_EOF'
-server {
-    listen ${API_PORT} default_server;
-    listen [::]:${API_PORT} default_server;
-    auth_basic "Hermes Agent Gateway";
-    auth_basic_user_file /etc/nginx/.htpasswd;
-    proxy_set_header X-Real-IP $remote_addr;
-    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-    proxy_set_header Host $http_host;
-    proxy_set_header Authorization $http_authorization;
-    proxy_pass_header Authorization;
-    location / {
-        proxy_pass http://127.0.0.1:${HERMES_INTERNAL_PORT};
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection "upgrade";
-        proxy_read_timeout 300s; proxy_send_timeout 300s;
-    }
-}
-NGX_EOF
-sudo cp /tmp/hermes-nginx.conf /etc/nginx/sites-available/hermes
-sudo ln -sf /etc/nginx/sites-available/hermes /etc/nginx/sites-enabled/hermes
-sudo nginx -t && sudo systemctl restart nginx && sudo systemctl enable nginx
-
-# 12. VERIFY
-echo "[12/12] Waiting for Hermes..."
-echo "Waiting for Hermes gateway..."
-for i in $(seq 1 12); do
-    if systemctl is-active --quiet hermes-gateway; then echo "Hermes gateway is active."; break; fi
-    if [[ "$i" -eq 12 ]]; then echo "WARNING: Not active. Check: sudo journalctl -u hermes-gateway -n 30"; fi
-    sleep 5
-done
-echo; echo "Hermes service:"
-sudo systemctl status hermes-gateway --no-pager || true
-echo; echo "Checking API..."
-curl -sS --max-time 15 -H "Authorization: Bearer ${API_SERVER_KEY}" "http://127.0.0.1:${API_PORT}/health" || true
-echo
-PUBLIC_IP="$(curl -4 -sS --max-time 10 https://api.ipify.org || echo "YOUR_PUBLIC_IP")"
-echo
 
 # SAVE CONNECTION INFO
 cat > "${HOME}/hermes-connection.txt" <<DATA_EOF
@@ -244,5 +148,7 @@ echo
 echo "Do NOT expose:"
 echo '  TCP 11434 - Ollama'
 echo '  TCP ${HERMES_INTERNAL_PORT} - Hermes internal (localhost only)'
+echo
+echo "Browser login: ${BASIC_AUTH_USER} / ${BASIC_AUTH_PASS}"
 echo
 echo "============================================================"
