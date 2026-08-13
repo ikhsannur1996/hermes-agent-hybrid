@@ -297,7 +297,7 @@ Environment=PATH=${HERMES_HOME}/.local/bin:/usr/local/bin:/usr/bin:/bin
 
 EnvironmentFile=${HERMES_HOME}/.hermes/.env
 
-ExecStart=${HERMES_BIN} gateway run
+ExecStart=${HERMES_BIN} gateway run --replace
 
 Restart=always
 RestartSec=5
