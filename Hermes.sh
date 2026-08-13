@@ -354,6 +354,11 @@ server {
         proxy_set_header Connection "upgrade";
         proxy_read_timeout 300s;
         proxy_send_timeout 300s;
+
+        # Retry on 502/503 (e.g. while Hermes is warming up)
+        proxy_next_upstream error timeout http_502 http_503;
+        proxy_next_upstream_tries 3;
+        proxy_next_upstream_timeout 15s;
     }
 }
 NGINXEOF
@@ -362,6 +367,26 @@ sudo ln -sf /etc/nginx/sites-available/hermes /etc/nginx/sites-enabled/hermes
 sudo nginx -t
 sudo systemctl restart nginx
 sudo systemctl enable nginx
+
+# ============================================================
+# 11c. MAKE NGINX WAIT FOR HERMES ON BOOT
+# ============================================================
+# Prevents 502 Bad Gateway on reboot: Nginx starts only after
+# hermes-gateway has started (and hermes waits for ollama).
+# Also retries upstream briefly if the gateway is still warming up.
+
+sudo mkdir -p /etc/systemd/system/nginx.service.d
+
+sudo tee /etc/systemd/system/nginx.service.d/wait-hermes.conf >/dev/null <<NGINXWAITEOF
+[Unit]
+After=hermes-gateway.service
+Wants=hermes-gateway.service
+NGINXWAITEOF
+
+sudo systemctl daemon-reload
+
+# Restart to pick up boot ordering drop-in
+sudo nginx -t && sudo systemctl restart nginx
 
 echo
 
