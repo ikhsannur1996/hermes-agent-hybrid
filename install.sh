@@ -414,12 +414,20 @@ sudo systemctl status hermes-gateway --no-pager || true
 echo
 echo "Checking API..."
 
-LOCAL_HEALTH="$(curl -sS \
-    --max-time 15 \
+# Test Hermes directly (bypass Nginx basic auth)
+HERMES_HEALTH="$(curl -sS --max-time 15 \
     -H "Authorization: Bearer ${API_SERVER_KEY}" \
-    "http://127.0.0.1:${API_PORT}/health" || true)"
+    "http://127.0.0.1:${HERMES_INTERNAL_PORT}/health" || echo "FAILED")"
 
-echo "${LOCAL_HEALTH}"
+echo "Hermes direct (port ${HERMES_INTERNAL_PORT}): ${HERMES_HEALTH}"
+
+# Also test through Nginx with basic auth
+NGINX_HEALTH="$(curl -sS --max-time 15 \
+    -u "${BASIC_AUTH_USER}:${BASIC_AUTH_PASS}" \
+    "http://127.0.0.1:${API_PORT}/health" || echo "FAILED")"
+
+echo "Nginx proxy (port ${API_PORT}): ${NGINX_HEALTH}"
+echo
 
 # ============================================================
 # PUBLIC IP — auto-detect with multiple methods
@@ -549,11 +557,3 @@ curl -X POST \\
       {
         "role": "user",
         "content": "Hello. Tell me which AI agent you are."
-      }
-    ]
-  }'
-EOF
-
-echo
-echo
-echo "============================================================"
