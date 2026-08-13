@@ -2,6 +2,7 @@
 set -Eeuo pipefail
 
 # HERMES AGENT HYBRID — One-shot Install
+# Browser basic auth: admin / admin
 # Usage:
 #   export OPENROUTER_API_KEY="sk-or-v1-xxx"
 #   curl -fsSL https://raw.githubusercontent.com/ikhsannur1996/hermes-agent-hybrid/main/install.sh | bash
@@ -10,7 +11,10 @@ OPENROUTER_API_KEY="${OPENROUTER_API_KEY:-sk-or-REPLACE_ME}"
 OLLAMA_MODEL="${OLLAMA_MODEL:-qwen3:8b}"
 OPENROUTER_MODEL="${OPENROUTER_MODEL:-qwen/qwen3-coder}"
 API_PORT="${API_PORT:-8642}"
+HERMES_INTERNAL_PORT="${HERMES_INTERNAL_PORT:-8643}"
 OLLAMA_URL="http://127.0.0.1:11434"
+BASIC_AUTH_USER="${BASIC_AUTH_USER:-admin}"
+BASIC_AUTH_PASS="${BASIC_AUTH_PASS:-admin}"
 
 if [[ "$OPENROUTER_API_KEY" == "sk-or-REPLACE_ME" ]]; then
     echo; echo "ERROR: Set your OpenRouter API key first."
@@ -21,10 +25,12 @@ fi
 
 API_SERVER_KEY="$(openssl rand -hex 32)"
 echo; echo "===== Hermes Hybrid Installation ====="; echo
-echo "Local model      : ${OLLAMA_MODEL}"
-echo "OpenRouter model : ${OPENROUTER_MODEL}"
-echo "API port         : ${API_PORT}"
-echo "Generated API key: ${API_SERVER_KEY}"; echo
+echo "Local model         : ${OLLAMA_MODEL}"
+echo "OpenRouter model    : ${OPENROUTER_MODEL}"
+echo "Public API port     : ${API_PORT} (Nginx + basic auth)"
+echo "Browser login       : ${BASIC_AUTH_USER} / ${BASIC_AUTH_PASS}"
+echo "Generated API key   : ${API_SERVER_KEY}"
+echo
 
 # 1. SYSTEM PACKAGES
 echo "[1/12] Updating system..."
@@ -87,8 +93,8 @@ echo "[8/12] Writing secrets..."
 cat > "${HOME}/.hermes/.env" <<ENV_EOF
 OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
 API_SERVER_ENABLED=true
-API_SERVER_HOST=0.0.0.0
-API_SERVER_PORT=${API_PORT}
+API_SERVER_HOST=127.0.0.1
+API_SERVER_PORT=${HERMES_INTERNAL_PORT}
 API_SERVER_KEY=${API_SERVER_KEY}
 ENV_EOF
 chmod 600 "${HOME}/.hermes/.env"
@@ -97,27 +103,21 @@ chmod 600 "${HOME}/.hermes/.env"
 echo "[9/12] Configuring Hermes..."
 cat > "${HOME}/.hermes/config.yaml" <<CONF_EOF
 model:
-  provider: custom
-  default: ${OLLAMA_MODEL}
-  base_url: ${OLLAMA_URL}/v1
-  context_length: 65536
+  provider: custom; default: ${OLLAMA_MODEL}
+  base_url: ${OLLAMA_URL}/v1; context_length: 65536
 fallback_providers:
-  - provider: openrouter
-    model: ${OPENROUTER_MODEL}
+  - provider: openrouter; model: ${OPENROUTER_MODEL}
 terminal:
-  backend: local
-  timeout: 180
+  backend: local; timeout: 180
 CONF_EOF
 chmod 600 "${HOME}/.hermes/config.yaml"
 
 # 10. FIREWALL
 echo "[10/12] Configuring firewall..."
-sudo ufw default deny incoming
-sudo ufw default allow outgoing
+sudo ufw default deny incoming; sudo ufw default allow outgoing
 sudo ufw allow 22/tcp
 sudo ufw allow "${API_PORT}/tcp"
-sudo ufw --force enable
-echo; sudo ufw status; echo
+sudo ufw --force enable; echo; sudo ufw status; echo
 
 # 11. SYSTEMD SERVICE
 echo "[11/12] Creating Hermes gateway service..."
@@ -128,81 +128,85 @@ cat > /tmp/hermes-gateway.service <<'SVC_EOF'
 [Unit]
 Description=Hermes Agent Gateway
 After=network-online.target ollama.service
-Wants=network-online.target
-Requires=ollama.service
+Wants=network-online.target; Requires=ollama.service
 
-[Service]
-Type=simple
-User=${HERMES_USER}
-Group=${HERMES_USER}
+[Service]; Type=simple
+User=${HERMES_USER}; Group=${HERMES_USER}
 WorkingDirectory=${HERMES_HOME}
 Environment=HOME=${HERMES_HOME}
 Environment=PATH=${HERMES_HOME}/.local/bin:/usr/local/bin:/usr/bin:/bin
 EnvironmentFile=${HERMES_HOME}/.hermes/.env
 ExecStart=${HERMES_BIN} gateway run
-Restart=always
-RestartSec=5
-KillSignal=SIGINT
-TimeoutStopSec=30
+Restart=always; RestartSec=5
+KillSignal=SIGINT; TimeoutStopSec=30
 
-[Install]
-WantedBy=multi-user.target
+[Install]; WantedBy=multi-user.target
 SVC_EOF
 sudo cp /tmp/hermes-gateway.service /etc/systemd/system/hermes-gateway.service
-sudo systemctl daemon-reload
-sudo systemctl enable hermes-gateway
-sudo systemctl restart hermes-gateway
+sudo systemctl daemon-reload; sudo systemctl enable hermes-gateway; sudo systemctl restart hermes-gateway
+
+# 11b. NGINX REVERSE PROXY WITH BASIC AUTH
+echo "[11b/12] Installing Nginx with basic auth..."
+sudo DEBIAN_FRONTEND=noninteractive apt-get install -y nginx apache2-utils
+HTPASSWD="$(openssl passwd -apr1 "${BASIC_AUTH_PASS}")"
+echo "${BASIC_AUTH_USER}:${HTPASSWD}" | sudo tee /etc/nginx/.htpasswd >/dev/null
+sudo chmod 644 /etc/nginx/.htpasswd; sudo rm -f /etc/nginx/sites-enabled/default
+cat > /tmp/hermes-nginx.conf <<'NGX_EOF'
+server {
+    listen ${API_PORT} default_server;
+    listen [::]:${API_PORT} default_server;
+    auth_basic "Hermes Agent Gateway";
+    auth_basic_user_file /etc/nginx/.htpasswd;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header Host $http_host;
+    proxy_set_header Authorization $http_authorization;
+    proxy_pass_header Authorization;
+    location / {
+        proxy_pass http://127.0.0.1:${HERMES_INTERNAL_PORT};
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_read_timeout 300s; proxy_send_timeout 300s;
+    }
+}
+NGX_EOF
+sudo cp /tmp/hermes-nginx.conf /etc/nginx/sites-available/hermes
+sudo ln -sf /etc/nginx/sites-available/hermes /etc/nginx/sites-enabled/hermes
+sudo nginx -t && sudo systemctl restart nginx && sudo systemctl enable nginx
 
 # 12. VERIFY
 echo "[12/12] Waiting for Hermes..."
 echo "Waiting for Hermes gateway..."
 for i in $(seq 1 12); do
-    if systemctl is-active --quiet hermes-gateway; then
-        echo "Hermes gateway is active."; break
-    fi
-    if [[ "$i" -eq 12 ]]; then
-        echo "WARNING: Hermes gateway not active yet. Check logs: sudo journalctl -u hermes-gateway -n 30"
-    fi
+    if systemctl is-active --quiet hermes-gateway; then echo "Hermes gateway is active."; break; fi
+    if [[ "$i" -eq 12 ]]; then echo "WARNING: Not active. Check: sudo journalctl -u hermes-gateway -n 30"; fi
     sleep 5
 done
-
 echo; echo "Hermes service:"
 sudo systemctl status hermes-gateway --no-pager || true
-
 echo; echo "Checking API..."
-LOCAL_HEALTH="$(curl -sS --max-time 15 -H "Authorization: Bearer ${API_SERVER_KEY}"
-  "http://127.0.0.1:${API_PORT}/health" || true)"
-echo "${LOCAL_HEALTH}"
+curl -sS --max-time 15 -H "Authorization: Bearer ${API_SERVER_KEY}" "http://127.0.0.1:${API_PORT}/health" || true
+echo
 PUBLIC_IP="$(curl -4 -sS --max-time 10 https://api.ipify.org || echo "YOUR_PUBLIC_IP")"
+echo
 
 # SAVE CONNECTION INFO
 cat > "${HOME}/hermes-connection.txt" <<DATA_EOF
 Hermes Agent Hybrid
 ===================
 
-Public API:
-http://${PUBLIC_IP}:${API_PORT}/v1
+Public API: http://${PUBLIC_IP}:${API_PORT}/v1
+Health: http://${PUBLIC_IP}:${API_PORT}/health
+Models: http://${PUBLIC_IP}:${API_PORT}/v1/models
+Chat: http://${PUBLIC_IP}:${API_PORT}/v1/chat/completions
 
-Health:
-http://${PUBLIC_IP}:${API_PORT}/health
+API Key: ${API_SERVER_KEY}
+Browser Login: ${BASIC_AUTH_USER} / ${BASIC_AUTH_PASS}
 
-Models:
-http://${PUBLIC_IP}:${API_PORT}/v1/models
-
-Chat:
-http://${PUBLIC_IP}:${API_PORT}/v1/chat/completions
-
-API Key:
-${API_SERVER_KEY}
-
-Local Ollama:
-http://127.0.0.1:11434
-
-Local Model:
-${OLLAMA_MODEL}
-
-OpenRouter Fallback:
-${OPENROUTER_MODEL}
+Local Ollama: http://127.0.0.1:11434
+Local Model: ${OLLAMA_MODEL}
+OpenRouter Fallback: ${OPENROUTER_MODEL}
 DATA_EOF
 chmod 600 "${HOME}/hermes-connection.txt"
 
@@ -211,7 +215,7 @@ echo "============================================================"
 echo " INSTALLATION FINISHED"
 echo "============================================================"
 echo
-echo "PUBLIC API"
+echo "PUBLIC API (browser login: admin / admin)"
 echo "  http://${PUBLIC_IP}:${API_PORT}/v1"
 echo
 echo "HEALTH"
@@ -225,6 +229,8 @@ echo "  http://${PUBLIC_IP}:${API_PORT}/v1/chat/completions"
 echo
 echo "API KEY: ${API_SERVER_KEY}"
 echo
+echo "BROWSER LOGIN: ${BASIC_AUTH_USER} / ${BASIC_AUTH_PASS}"
+echo
 echo "Saved to: ${HOME}/hermes-connection.txt"
 echo
 echo "============================================================"
@@ -233,9 +239,10 @@ echo "============================================================"
 echo
 echo "Cloud firewall/security group must allow:"
 echo '  TCP 22   - SSH'
-echo '  TCP ${API_PORT} - Hermes API'
+echo '  TCP ${API_PORT} - Hermes API (with basic auth)'
 echo
 echo "Do NOT expose:"
 echo '  TCP 11434 - Ollama'
+echo '  TCP ${HERMES_INTERNAL_PORT} - Hermes internal (localhost only)'
 echo
 echo "============================================================"

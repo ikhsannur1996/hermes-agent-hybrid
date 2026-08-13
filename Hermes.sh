@@ -48,6 +48,13 @@ API_PORT="8642"
 # Ollama remains localhost-only.
 OLLAMA_URL="http://127.0.0.1:11434"
 
+# Hermes runs on this internal port; Nginx proxies 8642 -> 8643
+HERMES_INTERNAL_PORT="8643"
+
+# Browser basic auth credentials (Nginx reverse proxy)
+BASIC_AUTH_USER="admin"
+BASIC_AUTH_PASS="admin"
+
 # =========================
 # OPTIONAL: SOURCE .env FILE
 # =========================
@@ -253,8 +260,8 @@ cat > "${HOME}/.hermes/.env" <<EOF
 OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
 
 API_SERVER_ENABLED=true
-API_SERVER_HOST=0.0.0.0
-API_SERVER_PORT=${API_PORT}
+API_SERVER_HOST=127.0.0.1
+API_SERVER_PORT=${HERMES_INTERNAL_PORT}
 API_SERVER_KEY=${API_SERVER_KEY}
 EOF
 
@@ -350,6 +357,57 @@ EOF
 sudo systemctl daemon-reload
 sudo systemctl enable hermes-gateway
 sudo systemctl restart hermes-gateway
+
+# ============================================================
+# 11b. NGINX REVERSE PROXY WITH BASIC AUTH
+# ============================================================
+
+echo "[11b/12] Installing Nginx with basic auth..."
+
+sudo DEBIAN_FRONTEND=noninteractive apt-get install -y nginx apache2-utils
+
+# Create htpasswd file (admin / admin)
+HTPASSWD=$(openssl passwd -apr1 "${BASIC_AUTH_PASS}")
+echo "${BASIC_AUTH_USER}:${HTPASSWD}" | sudo tee /etc/nginx/.htpasswd >/dev/null
+sudo chmod 644 /etc/nginx/.htpasswd
+
+# Remove default site
+sudo rm -f /etc/nginx/sites-enabled/default
+
+# Create Hermes reverse proxy config
+sudo tee /etc/nginx/sites-available/hermes >/dev/null <<NGINXEOF
+server {
+    listen ${API_PORT} default_server;
+    listen [::]:${API_PORT} default_server;
+
+    # Basic auth popup in browser
+    auth_basic "Hermes Agent Gateway";
+    auth_basic_user_file /etc/nginx/.htpasswd;
+
+    # Forward real IP to Hermes (for rate-limiting, logging)
+    proxy_set_header X-Real-IP \$remote_addr;
+    proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+    proxy_set_header Host \$http_host;
+    proxy_set_header Authorization \$http_authorization;
+    proxy_pass_header Authorization;
+
+    location / {
+        proxy_pass http://127.0.0.1:${HERMES_INTERNAL_PORT};
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_read_timeout 300s;
+        proxy_send_timeout 300s;
+    }
+}
+NGINXEOF
+
+sudo ln -sf /etc/nginx/sites-available/hermes /etc/nginx/sites-enabled/hermes
+sudo nginx -t
+sudo systemctl restart nginx
+sudo systemctl enable nginx
+
+echo
 
 # ============================================================
 # 12. VERIFY
