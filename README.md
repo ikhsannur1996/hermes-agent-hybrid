@@ -5,13 +5,50 @@ A self-hosted AI agent gateway with **local-first inference** via Ollama, **auto
 ## Quick Start
 
 ```bash
-# Fully automated — just set your API key and run
+# One command — fully automated
 OPENROUTER_API_KEY="sk-or-v1-xxx" bash Hermes.sh
 ```
 
-> **That's it.** One command, no prompts, no editing files. The script installs everything — Ollama, Hermes Agent, 64K context, Nginx reverse proxy with basic auth (admin/admin), firewall, and systemd service. Full install takes 5-15 minutes.
+> **That's it.** No prompts, no editing files. The script installs everything — Ollama, Hermes Agent, 64K context, Nginx with basic auth (admin/admin), firewall, and systemd auto-start. Takes 5-15 minutes.
 
-### Test your server
+---
+
+## How to Run (3 Ways)
+
+### Option 1: Clone the repo and run
+
+```bash
+# On your local machine:
+git clone https://github.com/ikhsannur1996/hermes-agent-hybrid.git
+cd hermes-agent-hybrid
+
+# Copy to your Linux server:
+scp -r . root@YOUR_SERVER_IP:~/hermes-agent-hybrid
+ssh root@YOUR_SERVER_IP
+cd ~/hermes-agent-hybrid
+OPENROUTER_API_KEY="sk-or-v1-xxx" bash Hermes.sh
+```
+
+### Option 2: Pipe from URL (no clone needed)
+
+```bash
+# Run directly on your Linux server — no files to download:
+curl -fsSL https://raw.githubusercontent.com/ikhsannur1996/hermes-agent-hybrid/main/install.sh | OPENROUTER_API_KEY="sk-or-v1-xxx" bash
+```
+
+### Option 3: Deploy via SSH (from your local machine)
+
+```bash
+git clone https://github.com/ikhsannur1996/hermes-agent-hybrid.git
+cd hermes-agent-hybrid
+OPENROUTER_API_KEY="sk-or-v1-xxx" ./deploy.sh root@YOUR_SERVER_IP
+```
+
+---
+
+## After Installation
+
+### Test the API
 
 ```bash
 curl -X POST http://YOUR_SERVER_IP:8642/v1/chat/completions \
@@ -20,9 +57,20 @@ curl -X POST http://YOUR_SERVER_IP:8642/v1/chat/completions \
   -d '{"model":"hermes-agent","messages":[{"role":"user","content":"Hello!"}]}'
 ```
 
-> Or open `http://YOUR_SERVER_IP:8642` in a browser — you'll see a login prompt (admin / admin), then the API response.
+### Access in Browser
 
-> The API key is printed at the end of the install and saved to `~/hermes-connection.txt`.
+Open `http://YOUR_SERVER_IP:8642` — you will see a login prompt:
+
+```
+Username: admin
+Password: admin
+```
+
+### Save your connection info
+
+The script prints everything at the end and saves to `~/hermes-connection.txt`
+
+---
 
 ## Specs
 
@@ -30,8 +78,9 @@ curl -X POST http://YOUR_SERVER_IP:8642/v1/chat/completions \
 |-----------|------|---------|
 | Local model | Fast, private, offline-capable | `qwen3:8b` via Ollama |
 | Cloud fallback | Handles complex tasks | `qwen/qwen3-coder` via OpenRouter |
-| API gateway | OpenAI-compatible endpoint | Port `8643` (internal), `8642` (public via Nginx) |
+| API gateway | OpenAI-compatible endpoint | Port 8643 (internal), 8642 (public via Nginx) |
 | Browser auth | Basic auth login prompt | `admin` / `admin` |
+| Auto-start | On reboot | systemd enabled for all services |
 | VM target | 4 vCPU, 16 GB RAM, Ubuntu 24.04 | No GPU needed |
 
 ## Tutorials
@@ -48,44 +97,44 @@ curl -X POST http://YOUR_SERVER_IP:8642/v1/chat/completions \
 ## What's Inside
 
 ```
-Hermes.sh              — Install script (set OPENROUTER_API_KEY env var and run)
-install.sh             — One-shot installer for piping from URL
-deploy.sh              — Deploy via SSH to remote server
+Hermes.sh              - Install script (set OPENROUTER_API_KEY and run)
+install.sh             - One-shot installer for piping from URL
+deploy.sh              - Deploy via SSH to remote server
 tutorials/
-├── 01-overview.md     — What Hermes is and how it works
-├── 02-installation.md — Complete install walkthrough
-├── 03-configuration.md— All config files explained
-├── 04-api-usage.md    — API examples with curl, Python, Node.js
-├── 05-advanced.md     — Performance, security, monitoring
-└── 06-troubleshooting.md — Common issues & fixes
-README.md              — This file
++-- 01-overview.md     - What Hermes is and how it works
++-- 02-installation.md - Complete install walkthrough
++-- 03-configuration.md- All config files explained
++-- 04-api-usage.md    - API examples with curl, Python, Node.js
++-- 05-advanced.md     - Performance, security, monitoring
++-- 06-troubleshooting.md - Common issues & fixes
+README.md              - This file
 ```
 
 ## Architecture
 
 ```
-Browser ──► Nginx (port 8642) ──► Hermes Gateway (port 8643) ──► Ollama (local)
-                │                                                       │
-          login prompt:                                           fallback
-          admin / admin                                               │
-                                                                OpenRouter
+Browser --> Nginx (port 8642) --> Hermes Gateway (port 8643) --> Ollama (local)
+               |                                                 |
+         login prompt:                                     fallback
+         admin / admin                                         |
+                                                           OpenRouter
 ```
 
 ## Requirements
 
 - Ubuntu 24.04 (or recent Debian-based distro)
 - 4 vCPU, 16 GB RAM
-- [OpenRouter API key](https://openrouter.ai/keys) — pass via `OPENROUTER_API_KEY` env var
-- Ports `22` (SSH) and `8642` (Hermes via Nginx) open in firewall
+- [OpenRouter API key](https://openrouter.ai/keys) - pass via OPENROUTER_API_KEY env var
+- Ports 22 (SSH) and 8642 (Hermes via Nginx) open in firewall
 
 ## Important Notes
 
-- **Do not expose** port `11434` (Ollama) or port `8643` (Hermes internal) publicly
-- The script generates a random API key on each install — save it from the output
+- Do NOT expose port 11434 (Ollama) or port 8643 (Hermes internal) publicly
+- The script generates a random API key on each install - save it from the output
 - First request is slow (model loads into RAM)
-- `qwen3:8b` requires ~4.7 GB download on first install
-- Browser access to `http://YOUR_IP:8642` requires login: **admin** / **admin**
-- API client access (`curl`, SDKs) uses `Authorization: Bearer <API_KEY>` — both auth methods work
+- qwen3:8b requires ~4.7 GB download on first install
+- Browser access to http://YOUR_IP:8642 requires login: admin / admin
+- API client access (curl, SDKs) uses Authorization: Bearer <API_KEY>
 
 ## License
 
