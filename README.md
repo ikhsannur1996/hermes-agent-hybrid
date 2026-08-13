@@ -5,18 +5,26 @@ A self-hosted AI agent gateway with **local-first inference** via Ollama and **a
 ## Quick Start
 
 ```bash
-# 1. Edit Hermes.sh — set your OpenRouter API key
-OPENROUTER_API_KEY="sk-or-v1-your-key-here"
+# 1. Copy env file and set your OpenRouter API key
+cp .env.example .env
+# Edit .env: change OPENROUTER_API_KEY to your real key
 
-# 2. Run
+# 2. Run (one command)
 bash Hermes.sh
+```
 
-# 3. Test
+> **That's it.** The script installs everything — Ollama, Hermes Agent, 64K context, firewall, systemd service, and generates a random API key. Full install takes 5-15 minutes depending on download speed.
+
+### Test your server
+
+```bash
 curl -X POST http://YOUR_SERVER_IP:8642/v1/chat/completions \
   -H "Authorization: Bearer YOUR_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{"model":"hermes-agent","messages":[{"role":"user","content":"Hello!"}]}'
 ```
+
+> The API key is printed at the end of the install and saved to `~/hermes-connection.txt`.
 
 ## Specs
 
@@ -41,7 +49,8 @@ curl -X POST http://YOUR_SERVER_IP:8642/v1/chat/completions \
 ## What's Inside
 
 ```
-Hermes.sh              — Full install script (self-contained)
+.env.example           — Config template (copy to .env and set your key)
+Hermes.sh              — One-shot install script
 tutorials/
 ├── 01-overview.md     — What Hermes is and how it works
 ├── 02-installation.md — Complete install walkthrough
@@ -73,6 +82,7 @@ Your App ──► Hermes Gateway ──► Ollama (local)
 - The script generates a random API key on each install — save it from the output
 - First request is slow (model loads into RAM)
 - `qwen3:8b` requires ~4.7 GB download on first install
+- The script auto-detects `.env` in the same directory — no need to edit `Hermes.sh`
 
 ## License
 
