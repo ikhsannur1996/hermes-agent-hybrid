@@ -48,9 +48,9 @@ curl -X POST http://YOUR_SERVER_IP:8642/v1/chat/completions \
 ## What's Inside
 
 ```
-Hermes.sh              — Main install script (interactive API key prompt)
+Hermes.sh              — Install script (set OPENROUTER_API_KEY env var and run)
 install.sh             — One-shot installer for piping from URL
-deploy.sh              — Copies repo to remote server via SSH
+deploy.sh              — Deploy via SSH to remote server
 tutorials/
 ├── 01-overview.md     — What Hermes is and how it works
 ├── 02-installation.md — Complete install walkthrough
@@ -75,16 +75,17 @@ Browser ──► Nginx (port 8642) ──► Hermes Gateway (port 8643) ──�
 
 - Ubuntu 24.04 (or recent Debian-based distro)
 - 4 vCPU, 16 GB RAM
-- [OpenRouter API key](https://openrouter.ai/keys) — you'll be prompted during install
-- Ports `22` (SSH) and `8642` (Hermes) open in firewall
+- [OpenRouter API key](https://openrouter.ai/keys) — pass via `OPENROUTER_API_KEY` env var
+- Ports `22` (SSH) and `8642` (Hermes via Nginx) open in firewall
 
 ## Important Notes
 
-- **Do not expose port 11434** (Ollama) or port **8643** (Hermes internal) publicly
+- **Do not expose** port `11434` (Ollama) or port `8643` (Hermes internal) publicly
 - The script generates a random API key on each install — save it from the output
 - First request is slow (model loads into RAM)
 - `qwen3:8b` requires ~4.7 GB download on first install
-- Browser access requires login: **admin** / **admin**
+- Browser access to `http://YOUR_IP:8642` requires login: **admin** / **admin**
+- API client access (`curl`, SDKs) uses `Authorization: Bearer <API_KEY>` — both auth methods work
 
 ## License
 

@@ -4,26 +4,23 @@ set -Eeuo pipefail
 # ============================================================
 # HERMES REMOTE DEPLOY
 # ============================================================
-# Copies the Hermes Agent Hybrid repo to a remote Linux server
-# via SSH and runs the install script.
+# Copies the repo to a remote Linux server via SSH and runs
+# the fully automated install.
 #
 # Usage:
-#   ./deploy.sh user@server-ip
-#
-# Example:
-#   ./deploy.sh root@192.168.1.100
+#   OPENROUTER_API_KEY="sk-or-v1-xxx" ./deploy.sh user@server-ip
 # ============================================================
 
 if [[ $# -lt 1 ]]; then
-    echo "Usage: $0 user@server-ip"
+    echo "Usage: OPENROUTER_API_KEY=\"sk-or-v1-xxx\" $0 user@server-ip"
     echo
     echo "Examples:"
-    echo "  $0 root@192.168.1.100"
-    echo "  $0 ubuntu@my-vm.example.com"
+    echo "  OPENROUTER_API_KEY=\"sk-or-v1-xxx\" $0 root@192.168.1.100"
+    echo "  OPENROUTER_API_KEY=\"sk-or-v1-xxx\" $0 ubuntu@my-vm.example.com"
     echo
-    echo "Before running:"
-    echo "  1. Copy .env.example to .env and set your OpenRouter API key"
-    echo "  2. Make sure SSH access is set up (password or key)"
+    echo "Requirements:"
+    echo "  - SSH access to the remote server (password or key)"
+    echo "  - OpenRouter API key (set via env var)"
     exit 1
 fi
 
@@ -38,22 +35,11 @@ echo "Target    : ${REMOTE}"
 echo "Directory : ~/${REPO_DIR}"
 echo
 
-# Check for .env file
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-if [[ ! -f "${SCRIPT_DIR}/.env" ]]; then
-    echo "WARNING: No .env file found."
-    echo "The install will use defaults from Hermes.sh."
-    echo "Press Enter to continue, or Ctrl+C to abort and create .env first."
-    read -r
-else
-    echo "Found .env — will be deployed with the repo."
-fi
 
-echo
 echo "Copying files to ${REMOTE}..."
 echo
 
-# Create remote directory and copy everything except .git
 ssh "${REMOTE}" "mkdir -p ~/${REPO_DIR}"
 scp -r "${SCRIPT_DIR}/." "${REMOTE}:~/${REPO_DIR}/"
 
@@ -61,8 +47,7 @@ echo
 echo "Files copied. Running install on remote server..."
 echo
 
-# Run the install script remotely
-ssh -t "${REMOTE}" "cd ~/${REPO_DIR} && bash Hermes.sh"
+ssh -t "${REMOTE}" "cd ~/${REPO_DIR} && OPENROUTER_API_KEY=\"${OPENROUTER_API_KEY}\" bash Hermes.sh"
 
 echo
 echo "============================================================"
