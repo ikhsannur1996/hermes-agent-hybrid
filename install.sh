@@ -95,6 +95,17 @@ API_SERVER_KEY=${API_SERVER_KEY}
 ENV_EOF
 chmod 600 "${HOME}/.hermes/.env"
 
+# DETECT PUBLIC IP
+echo "Detecting public IP..."
+PUBLIC_IP=""
+if [[ -z "$PUBLIC_IP" ]]; then PUBLIC_IP="$(curl -4 -sS --max-time 5 https://api.ipify.org 2>/dev/null || true)"; fi
+if [[ -z "$PUBLIC_IP" ]]; then PUBLIC_IP="$(curl -4 -sS --max-time 5 https://ifconfig.me 2>/dev/null || true)"; fi
+if [[ -z "$PUBLIC_IP" ]]; then PUBLIC_IP="$(ip -4 addr show scope global 2>/dev/null | grep -oP 'inet \K[\d.]+' | head -1 || true)"; fi
+if [[ -z "$PUBLIC_IP" ]]; then PUBLIC_IP="$(hostname -I 2>/dev/null | awk '{print $1}' || true)"; fi
+if [[ -z "$PUBLIC_IP" ]]; then PUBLIC_IP="YOUR_SERVER_IP"; fi
+echo "Public IP: ${PUBLIC_IP}"
+echo
+
 # SAVE CONNECTION INFO
 cat > "${HOME}/hermes-connection.txt" <<DATA_EOF
 Hermes Agent Hybrid

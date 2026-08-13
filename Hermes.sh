@@ -437,10 +437,40 @@ LOCAL_HEALTH="$(curl -sS \
 echo "${LOCAL_HEALTH}"
 
 # ============================================================
-# PUBLIC IP
+# PUBLIC IP — auto-detect with multiple methods
 # ============================================================
 
-PUBLIC_IP="$(curl -4 -sS --max-time 10 https://api.ipify.org || echo "YOUR_PUBLIC_IP")"
+echo "Detecting public IP..."
+
+PUBLIC_IP=""
+
+# Method 1: External API (most reliable for public IP)
+if [[ -z "$PUBLIC_IP" ]]; then
+    PUBLIC_IP="$(curl -4 -sS --max-time 5 https://api.ipify.org 2>/dev/null || true)"
+fi
+
+# Method 2: Alternative external API
+if [[ -z "$PUBLIC_IP" ]]; then
+    PUBLIC_IP="$(curl -4 -sS --max-time 5 https://ifconfig.me 2>/dev/null || true)"
+fi
+
+# Method 3: Local network IP (useful for private VMs without public IP)
+if [[ -z "$PUBLIC_IP" ]]; then
+    PUBLIC_IP="$(ip -4 addr show scope global 2>/dev/null | grep -oP 'inet \K[\d.]+' | head -1 || true)"
+fi
+
+# Method 4: Hostname lookup
+if [[ -z "$PUBLIC_IP" ]]; then
+    PUBLIC_IP="$(hostname -I 2>/dev/null | awk '{print $1}' || true)"
+fi
+
+# Fallback
+if [[ -z "$PUBLIC_IP" ]]; then
+    PUBLIC_IP="YOUR_SERVER_IP"
+fi
+
+echo "Public IP: ${PUBLIC_IP}"
+echo
 
 # ============================================================
 # SAVE CONNECTION INFO
