@@ -49,6 +49,21 @@ API_PORT="8642"
 OLLAMA_URL="http://127.0.0.1:11434"
 
 # =========================
+# OPTIONAL: SOURCE .env FILE
+# =========================
+#
+# If a .env file exists next to this script, load it.
+# Values in .env override the defaults above.
+# This lets you configure without editing the script.
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+if [[ -f "${SCRIPT_DIR}/.env" ]]; then
+    echo "Loading configuration from ${SCRIPT_DIR}/.env"
+    set -a
+    source "${SCRIPT_DIR}/.env"
+    set +a
+fi
+
+# =========================
 # VALIDATION
 # =========================
 
@@ -119,7 +134,19 @@ fi
 sudo systemctl enable ollama
 sudo systemctl restart ollama
 
-sleep 8
+echo "Waiting for Ollama to be ready..."
+for i in $(seq 1 12); do
+    if curl -fsS "${OLLAMA_URL}/api/tags" >/dev/null 2>&1; then
+        echo "Ollama is ready."
+        break
+    fi
+    if [[ "$i" -eq 12 ]]; then
+        echo "ERROR: Ollama failed to start after 60 seconds."
+        sudo systemctl status ollama --no-pager || true
+        exit 1
+    fi
+    sleep 5
+done
 
 # ============================================================
 # 3. ENSURE OLLAMA IS RESPONDING
@@ -174,7 +201,18 @@ EOF
 sudo systemctl daemon-reload
 sudo systemctl restart ollama
 
-sleep 8
+echo "Waiting for Ollama to reload..."
+for i in $(seq 1 6); do
+    if curl -fsS "${OLLAMA_URL}/api/tags" >/dev/null 2>&1; then
+        echo "Ollama reloaded with 64K context."
+        break
+    fi
+    if [[ "$i" -eq 6 ]]; then
+        echo "ERROR: Ollama failed to reload."
+        exit 1
+    fi
+    sleep 5
+done
 
 # ============================================================
 # 6. INSTALL HERMES
@@ -182,7 +220,7 @@ sleep 8
 
 echo "[6/12] Installing Hermes Agent..."
 
-curl -fsSL https://hermes-agent.nousresearch.com/install.sh | bash
+curl -fsSL --max-time 60 https://hermes-agent.nousresearch.com/install.sh | bash
 
 export PATH="${HOME}/.local/bin:${PATH}"
 
@@ -319,7 +357,17 @@ sudo systemctl restart hermes-gateway
 
 echo "[12/12] Waiting for Hermes..."
 
-sleep 12
+echo "Waiting for Hermes gateway..."
+for i in $(seq 1 12); do
+    if systemctl is-active --quiet hermes-gateway; then
+        echo "Hermes gateway is active."
+        break
+    fi
+    if [[ "$i" -eq 12 ]]; then
+        echo "WARNING: Hermes gateway not active yet. Check logs: sudo journalctl -u hermes-gateway -n 30"
+    fi
+    sleep 5
+done
 
 echo
 echo "Hermes service:"
